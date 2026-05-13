@@ -232,6 +232,104 @@
     display: none; animation: fadeUp 0.2s;
   }
   .ex-guide.show { display: block; }
+
+  .ex-pill.log {
+    background: rgba(240, 136, 62, 0.12);
+    border-color: rgba(240, 136, 62, 0.4); color: var(--warn);
+  }
+  .ex-pill.log:hover { background: var(--warn); color: #000; border-color: var(--warn); }
+  .ex-pill.log.has-data {
+    background: rgba(63, 185, 80, 0.12);
+    border-color: rgba(63, 185, 80, 0.4); color: var(--primary-hi);
+  }
+  .ex-pill.log.has-data:hover { background: var(--primary); color: #000; border-color: var(--primary); }
+
+  .lift-panel {
+    margin-top: 12px; padding: 14px;
+    background: var(--bg-2);
+    border-radius: 10px;
+    border: 1px solid var(--border-hi);
+    display: none; animation: fadeUp 0.2s;
+  }
+  .lift-panel.show { display: block; }
+  .lift-panel-title {
+    font-size: 11px; color: var(--warn);
+    text-transform: uppercase; letter-spacing: 0.6px;
+    font-weight: 700; margin-bottom: 10px;
+  }
+  .lift-last {
+    font-size: 12px; color: var(--text-dim);
+    margin-bottom: 10px; padding: 8px 10px;
+    background: var(--bg); border-radius: 8px;
+    border-left: 3px solid var(--primary);
+  }
+  .lift-last strong { color: var(--text); }
+  .lift-last .pr-badge {
+    display: inline-block; background: var(--warn); color: #000;
+    padding: 1px 6px; border-radius: 999px;
+    font-size: 9px; font-weight: 800; margin-left: 4px;
+  }
+  .lift-inputs {
+    display: grid; grid-template-columns: 1fr 1fr auto;
+    gap: 6px; align-items: stretch;
+  }
+  .lift-inputs input {
+    background: var(--bg); border: 1px solid var(--border-hi);
+    border-radius: 8px; padding: 8px 10px;
+    color: var(--text); font-size: 14px; font-family: inherit;
+    width: 100%;
+  }
+  .lift-inputs input:focus { border-color: var(--warn); outline: none; }
+  .lift-save-btn {
+    background: var(--warn); color: #000; border: none;
+    border-radius: 8px; padding: 8px 14px;
+    font-weight: 700; font-size: 13px; cursor: pointer;
+    font-family: inherit; transition: 0.15s;
+  }
+  .lift-save-btn:active { transform: scale(0.96); }
+  .lift-input-label {
+    font-size: 10px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+  .lift-history {
+    margin-top: 10px;
+    max-height: 120px; overflow-y: auto;
+    font-size: 11px;
+  }
+  .lift-history-row {
+    display: flex; justify-content: space-between;
+    padding: 4px 8px; color: var(--text-dim);
+    border-radius: 4px;
+  }
+  .lift-history-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
+
+  /* Strength progression card */
+  .lift-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px;
+    margin-bottom: 8px;
+  }
+  .lift-card-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 8px; margin-bottom: 6px;
+  }
+  .lift-card-name { font-size: 13px; font-weight: 600; }
+  .lift-card-current { font-size: 16px; font-weight: 800; color: var(--primary-hi); }
+  .lift-card-progress { font-size: 11px; color: var(--text-dim); }
+  .lift-card-progress .up { color: var(--primary-hi); font-weight: 700; }
+  .lift-card-progress .down { color: var(--danger); font-weight: 700; }
+  .lift-card-progress .flat { color: var(--text-dim); }
+  .lift-spark {
+    margin-top: 4px;
+    height: 24px; display: flex; align-items: flex-end; gap: 2px;
+  }
+  .lift-spark-bar {
+    flex: 1; background: var(--accent);
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+    transition: 0.2s;
+  }
   .guide-section { margin-bottom: 10px; }
   .guide-section:last-child { margin-bottom: 0; }
   .guide-label { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; margin-bottom: 6px; }
@@ -866,6 +964,11 @@
   </div>
 
   <div class="card">
+    <div class="card-title">Strength progression <small>your lifts over time</small></div>
+    <div id="strengthProgress"></div>
+  </div>
+
+  <div class="card">
     <div class="card-title">By workout type</div>
     <div id="completionStats"></div>
   </div>
@@ -1080,6 +1183,7 @@ const State = {
   adjustments: LS.get('fm.adjustments', []),
   apiKey: LS.get('fm.apiKey', ''),
   model: LS.get('fm.model', DEFAULT_MODEL),
+  lifts: LS.get('fm.lifts', {}),  // { exerciseId: [{ date, weight, reps, note }] }
 };
 function save() {
   LS.set('fm.startDate', State.startDate);
@@ -1093,6 +1197,7 @@ function save() {
   LS.set('fm.adjustments', State.adjustments);
   LS.set('fm.apiKey', State.apiKey);
   LS.set('fm.model', State.model);
+  LS.set('fm.lifts', State.lifts);
 }
 
 // ============================================================
@@ -1846,19 +1951,24 @@ function renderExerciseList(container, exercises, completions, dayIso) {
   exercises.forEach(ex => {
     const done = !!completions[ex.id];
     const guide = GUIDES[ex.id];
+    const canLog = canLogWeight(ex.id);
+    const last = canLog ? getLastLift(ex.id) : null;
+    const pr = canLog ? getPRForExercise(ex.id) : null;
+    const hasLogToday = canLog && State.lifts[ex.id]?.some(l => l.date === dayIso);
     const card = document.createElement('div');
     card.className = 'exercise-card' + (done ? ' done' : '');
     card.innerHTML = `
       <div class="exercise-card-top">
         <div class="ex-check-wrap"><div class="ex-check ${done ? 'checked' : ''}" data-ex="${ex.id}" data-day="${dayIso}"></div></div>
         <div class="ex-info">
-          <div class="ex-name">${ex.name}</div>
+          <div class="ex-name">${ex.name}${hasLogToday ? ` <span style="font-size: 11px; color: var(--primary-hi); font-weight: 600;">· logged today</span>` : ''}</div>
           <div class="ex-sets"><span class="ex-sets-tag">${ex.sets} × ${ex.reps}</span></div>
+          <div class="ex-quick-actions">
+            ${guide ? `<button class="ex-pill howto-btn" data-ex="${ex.id}">📋 How to</button>
+            <button class="ex-pill yt yt-link" data-q="${encodeURIComponent(guide.yt)}">▶ Watch</button>` : ''}
+            ${canLog ? `<button class="ex-pill log ${hasLogToday ? 'has-data' : ''} log-btn" data-ex="${ex.id}" data-day="${dayIso}">📊 ${hasLogToday ? 'Edit lift' : 'Log lift'}</button>` : ''}
+          </div>
           ${guide ? `
-            <div class="ex-quick-actions">
-              <button class="ex-pill howto-btn" data-ex="${ex.id}">📋 How to</button>
-              <button class="ex-pill yt yt-link" data-q="${encodeURIComponent(guide.yt)}">▶ Watch</button>
-            </div>
             <div class="ex-guide" id="guide-${ex.id}-${dayIso}">
               <div class="guide-section">
                 <div class="guide-label">Target muscles</div>
@@ -1872,6 +1982,30 @@ function renderExerciseList(container, exercises, completions, dayIso) {
                 <svg class="yt-btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.546 15.568V8.432L15.818 12l-6.272 3.568z"/></svg>
                 Watch demo on YouTube
               </a>
+            </div>
+          ` : ''}
+          ${canLog ? `
+            <div class="lift-panel" id="lift-${ex.id}-${dayIso}">
+              <div class="lift-panel-title">📊 Log today's lift</div>
+              ${last ? `<div class="lift-last">Last time (${escapeHtml(daysAgo(last.date))}): <strong>${last.weight}kg × ${last.reps}</strong>${pr && pr.date === last.date ? ' <span class="pr-badge">PR</span>' : ''}${pr && pr.date !== last.date ? ` · PR: <strong>${pr.weight}kg × ${pr.reps}</strong>` : ''}</div>` : '<div class="lift-last">First time logging this — set your baseline.</div>'}
+              <div class="lift-inputs">
+                <div>
+                  <div class="lift-input-label">Weight (kg)</div>
+                  <input type="number" inputmode="decimal" step="0.5" class="lift-weight-input" placeholder="${last ? last.weight : '12.5'}">
+                </div>
+                <div>
+                  <div class="lift-input-label">Reps done</div>
+                  <input type="number" inputmode="numeric" class="lift-reps-input" placeholder="${last ? last.reps : ex.reps.replace(/[^\d]/g,'').slice(0,2) || '10'}">
+                </div>
+                <div style="display: flex; align-items: flex-end;">
+                  <button class="lift-save-btn save-lift-btn" data-ex="${ex.id}" data-day="${dayIso}">Save</button>
+                </div>
+              </div>
+              ${State.lifts[ex.id] && State.lifts[ex.id].length > 0 ? `
+                <div class="lift-history">
+                  ${[...State.lifts[ex.id]].reverse().slice(0,5).map(l => `<div class="lift-history-row"><span>${l.date}</span><span><strong style="color: var(--text);">${l.weight}kg × ${l.reps}</strong></span></div>`).join('')}
+                </div>
+              ` : ''}
             </div>
           ` : ''}
         </div>
@@ -1888,6 +2022,22 @@ function renderExerciseList(container, exercises, completions, dayIso) {
   container.querySelectorAll('.yt-link').forEach(el => el.addEventListener('click', e => {
     window.open(`https://www.youtube.com/results?search_query=${el.dataset.q}`, '_blank');
   }));
+  container.querySelectorAll('.log-btn').forEach(el => el.addEventListener('click', e => {
+    toggleLiftPanel(el.dataset.ex, el.dataset.day);
+  }));
+  container.querySelectorAll('.save-lift-btn').forEach(el => el.addEventListener('click', e => {
+    saveLiftFromPanel(el.dataset.ex, el.dataset.day);
+  }));
+  // Enter key in lift inputs → save
+  container.querySelectorAll('.lift-weight-input, .lift-reps-input').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const panel = input.closest('.lift-panel');
+        const btn = panel?.querySelector('.save-lift-btn');
+        if (btn) btn.click();
+      }
+    });
+  });
 }
 
 function onCheckToggle(e) {
@@ -2060,6 +2210,8 @@ function renderProgress() {
     byType[p.type].done += done;
     byType[p.type].total += total;
   }
+  renderStrengthProgress();
+
   $('#completionStats').innerHTML = Object.keys(byType).map(t => {
     const { done, total } = byType[t];
     const pct = total ? Math.round((done/total)*100) : 0;
@@ -2073,6 +2225,76 @@ function renderProgress() {
   }).join('');
 
   drawWeightChart();
+}
+
+// Map exercise IDs to names (for progress display)
+function exerciseName(exId) {
+  for (const type in BASE_EXERCISES) {
+    const ex = BASE_EXERCISES[type].find(e => e.id === exId);
+    if (ex) return ex.name;
+  }
+  const knee = KNEE_REHAB.find(e => e.id === exId);
+  if (knee) return knee.name;
+  return exId;
+}
+
+function renderStrengthProgress() {
+  const container = $('#strengthProgress');
+  if (!container) return;
+  const exIds = Object.keys(State.lifts).filter(id => State.lifts[id] && State.lifts[id].length > 0);
+  if (exIds.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding: 16px;"><div class="empty-state-icon">📊</div><div class="empty-state-title">No lifts logged yet</div><div class="empty-state-desc">Tap "📊 Log lift" on any exercise on the Today tab to start tracking weights.</div></div>`;
+    return;
+  }
+  // Sort by most recently logged
+  exIds.sort((a, b) => {
+    const aLast = State.lifts[a][State.lifts[a].length - 1].date;
+    const bLast = State.lifts[b][State.lifts[b].length - 1].date;
+    return bLast.localeCompare(aLast);
+  });
+  let html = '';
+  exIds.forEach(exId => {
+    const entries = State.lifts[exId];
+    if (entries.length === 0) return;
+    const last = entries[entries.length - 1];
+    const first = entries[0];
+    const pr = getPRForExercise(exId);
+    const deltaW = last.weight - first.weight;
+    const deltaR = last.reps - first.reps;
+    let progressBadge = '';
+    if (entries.length === 1) {
+      progressBadge = '<span class="flat">baseline set</span>';
+    } else if (deltaW > 0) {
+      progressBadge = `<span class="up">+${deltaW.toFixed(1)}kg</span> since day 1`;
+    } else if (deltaW < 0) {
+      progressBadge = `<span class="down">${deltaW.toFixed(1)}kg</span> vs day 1`;
+    } else if (deltaR > 0) {
+      progressBadge = `<span class="up">+${deltaR} reps</span> at same weight`;
+    } else {
+      progressBadge = '<span class="flat">holding steady</span>';
+    }
+    // Sparkline
+    const maxW = Math.max(...entries.map(e => e.weight));
+    const minW = Math.min(...entries.map(e => e.weight));
+    const range = Math.max(0.5, maxW - minW);
+    const bars = entries.slice(-12).map(e => {
+      const h = range === 0 ? 50 : Math.max(15, ((e.weight - minW) / range) * 100);
+      return `<div class="lift-spark-bar" style="height: ${h}%;" title="${e.date}: ${e.weight}kg × ${e.reps}"></div>`;
+    }).join('');
+    html += `
+      <div class="lift-card">
+        <div class="lift-card-top">
+          <div>
+            <div class="lift-card-name">${exerciseName(exId)}</div>
+            <div class="lift-card-progress">${progressBadge} · ${entries.length} log${entries.length>1?'s':''} · PR ${pr.weight}kg × ${pr.reps}</div>
+          </div>
+          <div class="lift-card-current">${last.weight}<span style="font-size: 11px; color: var(--text-dim);">kg × ${last.reps}</span></div>
+        </div>
+        ${entries.length > 1 ? `<div class="lift-spark">${bars}</div>` : ''}
+      </div>
+    `;
+  });
+  container.innerHTML = html;
 }
 
 function drawWeightChart() {
@@ -2375,6 +2597,100 @@ function resetAll() {
   if (!confirm('Reset everything? This deletes all your progress permanently.')) return;
   ['fm.startDate','fm.startWeight','fm.targetWeight','fm.completions','fm.moods','fm.weights'].forEach(LS.del);
   location.reload();
+}
+
+// ============================================================
+// LIFT LOGGING (weight + reps per exercise)
+// ============================================================
+// Exercises that don't need weight tracking
+const NO_WEIGHT_EXERCISES = new Set([
+  'p6','f6','v1','v2','v3','v4',     // cardio
+  'r1','r2','r3','rs1','rs2',         // recovery
+  'h6','h5',                           // bodyweight core
+  'k1','k2','k3','k4','k5'             // knee rehab
+]);
+
+function canLogWeight(exId) {
+  return !NO_WEIGHT_EXERCISES.has(exId);
+}
+
+function getLastLift(exId) {
+  const arr = State.lifts[exId];
+  if (!arr || arr.length === 0) return null;
+  return arr[arr.length - 1];
+}
+
+function getPRForExercise(exId) {
+  const arr = State.lifts[exId];
+  if (!arr || arr.length === 0) return null;
+  // PR = highest weight × reps combo (weight first, then reps)
+  return arr.reduce((best, cur) => {
+    if (!best) return cur;
+    if (cur.weight > best.weight) return cur;
+    if (cur.weight === best.weight && cur.reps > best.reps) return cur;
+    return best;
+  }, null);
+}
+
+function daysAgo(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  const now = new Date(); now.setHours(0,0,0,0);
+  const diff = Math.floor((now - d) / 86400000);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'yesterday';
+  return diff + ' days ago';
+}
+
+function logLift(exId, weight, reps, note) {
+  const w = parseFloat(weight);
+  const r = parseInt(reps);
+  if (isNaN(w) || w < 0) { toast('Enter a valid weight'); return false; }
+  if (isNaN(r) || r < 0) { toast('Enter valid reps'); return false; }
+  if (!State.lifts[exId]) State.lifts[exId] = [];
+  const date = today();
+  // Check for PR
+  const prevPR = getPRForExercise(exId);
+  // Replace today's entry if exists
+  const existing = State.lifts[exId].findIndex(l => l.date === date);
+  const entry = { date, weight: w, reps: r, note: note || '' };
+  if (existing >= 0) State.lifts[exId][existing] = entry;
+  else State.lifts[exId].push(entry);
+  // Detect PR (only on new entries, not edits)
+  let isPR = false;
+  if (existing < 0 && (!prevPR || w > prevPR.weight || (w === prevPR.weight && r > prevPR.reps))) {
+    isPR = true;
+  }
+  save();
+  if (isPR && prevPR) {
+    toast(`🏆 New PR! ${w}kg × ${r} (was ${prevPR.weight}kg × ${prevPR.reps})`);
+  } else if (isPR) {
+    toast(`✓ Logged · first time: ${w}kg × ${r}`);
+  } else {
+    toast(`✓ Logged: ${w}kg × ${r}`);
+  }
+  return true;
+}
+
+function toggleLiftPanel(exId, dayIso) {
+  const panel = document.getElementById(`lift-${exId}-${dayIso}`);
+  if (!panel) return;
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) {
+    const input = panel.querySelector('.lift-weight-input');
+    if (input) setTimeout(() => input.focus(), 50);
+  }
+}
+
+function saveLiftFromPanel(exId, dayIso) {
+  const panel = document.getElementById(`lift-${exId}-${dayIso}`);
+  if (!panel) return;
+  const w = panel.querySelector('.lift-weight-input').value;
+  const r = panel.querySelector('.lift-reps-input').value;
+  if (logLift(exId, w, r)) {
+    panel.classList.remove('show');
+    renderToday();
+    renderProgress();
+  }
 }
 
 // ============================================================

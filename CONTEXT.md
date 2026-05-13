@@ -40,7 +40,25 @@ A personal 30-day fitness plan dashboard for Yong Joo. Single-file HTML web app 
 - Knee pain → Auto-swap to upper body + low-resistance bike + extra rehab
 - Sick → Full rest
 
-## What Has Been Built (v4 — current)
+## What Has Been Built (v5 — current)
+v5 adds **per-exercise weight logging** for progressive overload tracking:
+- Every weighted exercise gets a "📊 Log lift" pill (skipped for cardio, bodyweight, knee rehab)
+- Tap → expands inline panel with Weight (kg) + Reps inputs + Save button
+- Smart defaults: pre-fills placeholder with your last logged weight/reps
+- Shows "Last time (5 days ago): 12.5kg × 10" reminder
+- Pill changes color (green ✓ with text "Edit lift") once today is logged
+- Press Enter in either field to save
+- 5 most recent entries shown in mini-history below inputs
+- Persists in `State.lifts = { exerciseId: [{ date, weight, reps, note }] }`
+- **PR detection** — toast pops "🏆 New PR!" when you beat your previous best (weight then reps)
+- **New "Strength progression" card** on Progress tab:
+  - Per-exercise card with: current weight × reps, progress vs day 1 (+/- kg or reps), PR record, total log count
+  - Mini sparkline chart of last 12 entries (height = relative weight)
+  - Sorted by most recently logged
+  - Empty state guides user to start logging on Today tab
+- Lift data included in export/import JSON
+
+## What Has Been Built (v4)
 v4 adds **real Claude AI coach** (BYOK — bring your own key):
 - Settings → Fitness Coach card: paste Anthropic API key (`sk-ant-...`), pick model (Haiku 4.5 default, Sonnet 4.6, or Opus 4.6)
 - "Test" button confirms the key works before relying on it
