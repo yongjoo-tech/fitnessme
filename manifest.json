@@ -1,0 +1,18 @@
+{
+  "name": "FitnessMe — 30 Day Plan",
+  "short_name": "FitnessMe",
+  "description": "Personal 30-day fitness dashboard with adaptive workouts and progress tracking",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
