@@ -40,7 +40,21 @@ A personal 30-day fitness plan dashboard for Yong Joo. Single-file HTML web app 
 - Knee pain → Auto-swap to upper body + low-resistance bike + extra rehab
 - Sick → Full rest
 
-## What Has Been Built (v3 — current)
+## What Has Been Built (v4 — current)
+v4 adds **real Claude AI coach** (BYOK — bring your own key):
+- Settings → Fitness Coach card: paste Anthropic API key (`sk-ant-...`), pick model (Haiku 4.5 default, Sonnet 4.6, or Opus 4.6)
+- "Test" button confirms the key works before relying on it
+- When a key is set, `sendToCoach()` calls Anthropic Messages API directly from the browser using `anthropic-dangerous-direct-browser-access: true` header
+- System prompt includes: PFPS constraint, full weekly split, exercise ID list, knee-rehab requirement, and structured JSON output schema
+- User message includes: goal, current day, completion stats, mood counts, weight delta, last 7 days detail, last 3 conversations
+- Claude returns JSON `{ response, adjustments[] }` — same shape as rules engine, so adjustments flow through identical `applyCoachAdjustments()`
+- Each coach reply tagged with `source: 'claude' | 'rules'`, shown as 🧠 Claude or ⚙️ Rules in the chat
+- Coach mode badge in Settings shows CLAUDE ON or RULES ENGINE
+- API key stored masked (`••••••••XXXXXX`); cleared when user blanks the field
+- **Graceful fallback** — if Claude API errors (invalid key, rate limit, network), it auto-falls back to the rules engine and toasts a warning
+- Cost: ~$0.001 per message with Haiku, ~$0.01 with Sonnet
+
+## What Has Been Built (v3)
 v3 adds:
 - **Goal banner** at top of Today screen — shows current goals ("V-shaped body · higher VO2 max · 3kg fat loss") with tap-to-edit
 - **Consult Fitness Coach** floating button (bottom-right, above nav)

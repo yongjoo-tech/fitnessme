@@ -953,6 +953,24 @@
 
   <div class="card">
     <div class="card-title">Fitness Coach</div>
+    <div class="setting-row" style="flex-direction: column; align-items: stretch; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 14px;">
+      <div>
+        <div class="setting-label">Coach mode <span id="coachModeBadge" style="margin-left: 8px;"></span></div>
+        <div class="setting-desc">Anthropic API key enables Claude-powered coaching (~$0.001/message with Haiku). Without a key, the built-in rules engine runs.</div>
+      </div>
+      <input type="password" id="settingsApiKey" class="input-field" placeholder="sk-ant-api-..." autocomplete="off" spellcheck="false" onchange="saveApiKey()">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <select id="settingsModel" class="input-field" style="flex: 1; min-width: 180px;" onchange="saveModel()">
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — fast & cheap (recommended)</option>
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — balanced</option>
+          <option value="claude-opus-4-6">Claude Opus 4.6 — best, most expensive</option>
+        </select>
+        <button class="btn-secondary" onclick="testApiKey()">Test</button>
+      </div>
+      <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5;">
+        Get a key at <a href="https://console.anthropic.com/" target="_blank" rel="noopener" style="color: var(--accent);">console.anthropic.com</a>. Key is stored on this device only. It's visible in browser DevTools — only use a key you can rotate easily.
+      </div>
+    </div>
     <div class="setting-row">
       <div style="flex: 1;">
         <div class="setting-label">Active adjustments</div>
@@ -1049,6 +1067,7 @@ const LS = {
   del(k) { localStorage.removeItem(k); }
 };
 const DEFAULT_GOAL = 'V-shaped body · higher VO2 max · 3kg fat loss';
+const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 const State = {
   startDate: LS.get('fm.startDate', null),
   startWeight: LS.get('fm.startWeight', null),
@@ -1059,6 +1078,8 @@ const State = {
   goal: LS.get('fm.goal', DEFAULT_GOAL),
   coachHistory: LS.get('fm.coachHistory', []),
   adjustments: LS.get('fm.adjustments', []),
+  apiKey: LS.get('fm.apiKey', ''),
+  model: LS.get('fm.model', DEFAULT_MODEL),
 };
 function save() {
   LS.set('fm.startDate', State.startDate);
@@ -1070,6 +1091,8 @@ function save() {
   LS.set('fm.goal', State.goal);
   LS.set('fm.coachHistory', State.coachHistory);
   LS.set('fm.adjustments', State.adjustments);
+  LS.set('fm.apiKey', State.apiKey);
+  LS.set('fm.model', State.model);
 }
 
 // ============================================================
@@ -1472,19 +1495,24 @@ function composeCoachResponse(analysis, adjustments, ctx, userMsg) {
 }
 
 function consultCoach(userMessage) {
+  // Rules-based fallback path
   const ctx = buildCoachContext();
   const analysis = analyzeMessage(userMessage);
   const adjustments = generateAdjustments(analysis, ctx);
   const response = composeCoachResponse(analysis, adjustments, ctx, userMessage);
+  return finalizeCoachEntry(userMessage, response, adjustments, 'rules');
+}
+
+function finalizeCoachEntry(userMessage, response, adjustments, source) {
   const entry = {
     date: today(),
     timestamp: Date.now(),
     user: userMessage,
     coach: response,
+    source,
     adjustments: adjustments.map(a => ({ reason: a.reason, type: a.type, days: `${a.startDay}-${a.endDay}` }))
   };
   State.coachHistory.push(entry);
-  // Apply adjustments
   adjustments.forEach(a => {
     a.id = 'adj_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
     a.createdAt = Date.now();
@@ -1492,6 +1520,170 @@ function consultCoach(userMessage) {
   });
   save();
   return { response, adjustments, entry };
+}
+
+// ============================================================
+// CLAUDE API — BYOK (Bring Your Own Key)
+// ============================================================
+const COACH_SYSTEM_PROMPT = `You are an expert personal fitness coach embedded in a 30-day fitness dashboard app for Yong Joo, an intermediate-level lifter.
+
+CRITICAL CONSTRAINTS (always respect):
+- User has Patellofemoral Pain Syndrome (PFPS) — knee pain on the front of the knee
+- AVOID: deep squats, lunges with deep knee bend, jumping, running, high-impact movements
+- PREFER: hip-hinge dominant (RDLs over squats), bike at low resistance, elliptical, incline walking
+- Equipment: Anytime Fitness gym + 5kg home dumbbell
+- Time budget: 30-60 min per session
+- Sessions Mon-Sat, Sun rest
+
+WEEKLY SPLIT:
+- Mon (slot 0): Upper Push — chest/shoulders/triceps + 20min LISS bike
+- Tue (slot 1): Lower Hinge + Core — RDLs, glutes, calves, core (no deep knee flexion)
+- Wed (slot 2): Active Recovery — walk + mobility + extended knee rehab
+- Thu (slot 3): Upper Pull — V-SHAPE focus (lats, rows, rear delts, lateral raises, biceps)
+- Fri (slot 4): Full Body Strength — compound lifts + anti-rotation core
+- Sat (slot 5): VO2 Max — Norwegian 4×4 protocol on bike (no running)
+- Sun (slot 6): Rest + mobility
+Plus daily 5-min knee rehab (glute bridges, clamshells, terminal knee extension, straight leg raise, wall slide 0-45°)
+
+EXERCISE IDs (use these exact ids in your adjustments):
+PUSH: p1 (Incline DB Bench), p2 (Seated DB Shoulder Press), p3 (Cable Chest Fly), p4 (DB Lateral Raise), p5 (Tricep Rope Pushdown), p6 (LISS Bike 20min)
+HINGE: h1 (Romanian Deadlift), h2 (DB Hip Thrust), h3 (Single-leg DB RDL), h4 (Standing Calf Raise), h5 (Hanging Knee Raise), h6 (Plank)
+RECOVERY: r1 (Brisk walk), r2 (Mobility flow), r3 (Foam roll legs)
+PULL: pu1 (Wide-Grip Lat Pulldown), pu2 (Seated Cable Row), pu3 (Single-Arm DB Row), pu4 (Face Pulls), pu5 (DB Lateral Raise), pu6 (DB Bicep Curl)
+FULL: f1 (Trap Bar Deadlift), f2 (DB Bench Press), f3 (Chest-Supported DB Row), f4 (DB OHP), f5 (Pallof Press), f6 (Incline Walk 10min)
+VO2: v1 (Warmup), v2 (4 min HARD × 4), v3 (3 min easy recovery), v4 (Cooldown)
+REST: rs1 (Knee rehab extended), rs2 (Light stretching)
+KNEE REHAB: k1 (Glute Bridge), k2 (Clamshell), k3 (Terminal Knee Extension), k4 (Straight Leg Raise), k5 (Wall Slide 0-45°)
+
+YOUR JOB:
+1. Read the user's recent data + current message
+2. Respond with a brief, warm, direct coaching reply (2-5 sentences, conversational — don't lecture)
+3. Recommend SPECIFIC plan adjustments as a JSON array
+
+OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences, no preamble:
+{
+  "response": "your coaching reply (2-5 sentences, can use **bold** for emphasis)",
+  "adjustments": [
+    {
+      "type": "avoid_exercises",
+      "startDay": <int 1-30>,
+      "endDay": <int 1-30>,
+      "ids": ["exId1","exId2"],
+      "reason": "human-readable WHY, shown to user"
+    },
+    {
+      "type": "reduce_volume",
+      "startDay": <int>, "endDay": <int>,
+      "reduction": <int, sets to subtract>,
+      "reason": "..."
+    },
+    {
+      "type": "time_cap",
+      "startDay": <int>, "endDay": <int>,
+      "keepTop": <int, exercises to keep>,
+      "reason": "..."
+    },
+    {
+      "type": "add_exercise",
+      "startDay": <int>, "endDay": <int>,
+      "exercise": { "id": "custom_unique_id", "name": "Exercise Name", "sets": <int>, "reps": "<str e.g. '10' or '12 each' or '15 min'>" },
+      "onlyTypes": ["push","pull","full"],
+      "reason": "..."
+    },
+    {
+      "type": "increase_intensity",
+      "startDay": <int>, "endDay": <int>,
+      "reason": "..."
+    }
+  ]
+}
+
+If no adjustments needed (general advice/chat), return adjustments: []. Be specific. Be direct. Knee safety is non-negotiable.`;
+
+async function callClaudeAPI(userMessage, ctx) {
+  const key = State.apiKey;
+  if (!key) throw new Error('No API key configured');
+  const model = State.model || DEFAULT_MODEL;
+
+  // Build user message with full context
+  const recentSummary = ctx.recent.map(r => `Day ${r.day} (${r.type}): ${Math.round(r.completionPct*100)}% done${r.mood ? ', mood: '+r.mood : ''}`).join('\n');
+  const recentChat = State.coachHistory.slice(-3).map(h => `User: ${h.user}\nCoach: ${h.coach}`).join('\n\n');
+
+  const contextBlock = `USER'S CURRENT STATE:
+- Goal: ${ctx.goal || 'V-shape, VO2 max, 3kg fat loss'}
+- Day ${ctx.dayIdx + 1} of 30 (${ctx.daysLeft} days left)
+- Last 7-day completion: ${Math.round(ctx.avgCompletion*100)}%
+- Mood counts (7d): tired=${ctx.tiredCount}, sore=${ctx.soreCount}, knee_pain=${ctx.kneePainCount}, great/good=${ctx.greatCount}
+- Weight: started ${ctx.startWeight || '?'}kg → current ${ctx.currentWeight?.toFixed(1) || '?'}kg (delta ${ctx.weightDelta?.toFixed(1) || '0'}kg) → target ${ctx.targetWeight || '?'}kg
+- Recent days detail:\n${recentSummary || '(no history yet)'}
+
+${recentChat ? 'RECENT CONVERSATION:\n' + recentChat + '\n\n' : ''}USER'S NEW MESSAGE: ${userMessage}
+
+Respond with valid JSON only.`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      system: COACH_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: contextBlock }]
+    })
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`API error ${resp.status}: ${errText.slice(0,200)}`);
+  }
+  const data = await resp.json();
+  const text = data.content?.[0]?.text || '';
+  // Extract JSON (strip any accidental markdown)
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Coach did not return valid JSON');
+  const parsed = JSON.parse(jsonMatch[0]);
+  if (!parsed.response) throw new Error('Coach response missing "response" field');
+  if (!Array.isArray(parsed.adjustments)) parsed.adjustments = [];
+  return parsed;
+}
+
+async function consultCoachClaude(userMessage) {
+  const ctx = buildCoachContext();
+  const { response, adjustments } = await callClaudeAPI(userMessage, ctx);
+  // Validate + clamp days
+  const cleaned = adjustments.filter(a => a && a.type && a.reason).map(a => ({
+    ...a,
+    startDay: Math.max(1, Math.min(30, parseInt(a.startDay) || ctx.dayIdx + 2)),
+    endDay: Math.max(1, Math.min(30, parseInt(a.endDay) || ctx.dayIdx + 8))
+  }));
+  return finalizeCoachEntry(userMessage, response, cleaned, 'claude');
+}
+
+function testApiKey() {
+  const key = State.apiKey;
+  if (!key) { toast('Enter an API key first'); return; }
+  if (!key.startsWith('sk-ant-')) { toast('Key should start with sk-ant-'); return; }
+  toast('Testing connection…');
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: State.model || DEFAULT_MODEL,
+      max_tokens: 16,
+      messages: [{ role: 'user', content: 'Reply with the word OK only.' }]
+    })
+  }).then(r => r.ok ? toast('✓ Connection works!') : r.text().then(t => toast('✗ ' + t.slice(0,100))))
+    .catch(e => toast('✗ ' + e.message.slice(0,100)));
 }
 
 // ============================================================
@@ -2033,6 +2225,17 @@ function renderSettings() {
   if (State.startDate) $('#settingsStart').value = State.startDate;
   if (State.startWeight) $('#settingsStartWeight').value = State.startWeight;
   if (State.targetWeight) $('#settingsTargetWeight').value = State.targetWeight;
+  if ($('#settingsApiKey')) $('#settingsApiKey').value = State.apiKey ? '••••••••' + (State.apiKey.slice(-6)) : '';
+  if ($('#settingsModel')) $('#settingsModel').value = State.model || DEFAULT_MODEL;
+  // Coach badge
+  const badge = $('#coachModeBadge');
+  if (badge) {
+    if (State.apiKey) {
+      badge.innerHTML = `<span style="background: var(--gradient); color: #000; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;">CLAUDE ON</span>`;
+    } else {
+      badge.innerHTML = `<span style="background: var(--bg-3); color: var(--text-dim); padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;">RULES ENGINE</span>`;
+    }
+  }
   // Coach state
   const idx = daysSince(State.startDate);
   const day1 = idx + 1;
@@ -2041,6 +2244,31 @@ function renderSettings() {
   if (adjDesc) adjDesc.textContent = active.length === 0 ? 'None' : `${active.length} adjustment${active.length>1?'s':''} affecting upcoming days`;
   const hDesc = $('#coachHistoryDesc');
   if (hDesc) hDesc.textContent = State.coachHistory.length === 0 ? 'No conversations yet' : `${State.coachHistory.length} conversation${State.coachHistory.length>1?'s':''}`;
+}
+
+function saveApiKey() {
+  const v = $('#settingsApiKey').value.trim();
+  // If user types over the masked value, save it; otherwise keep existing
+  if (v.startsWith('sk-ant-')) {
+    State.apiKey = v;
+    save();
+    renderSettings();
+    toast('API key saved');
+  } else if (v === '') {
+    State.apiKey = '';
+    save();
+    renderSettings();
+    toast('API key cleared — using rules engine');
+  } else if (v.startsWith('•')) {
+    // Masked value untouched — do nothing
+  } else {
+    toast('Key should start with sk-ant-');
+  }
+}
+function saveModel() {
+  State.model = $('#settingsModel').value;
+  save();
+  toast('Model updated');
 }
 
 function clearCoachAdjustments() {
@@ -2178,11 +2406,27 @@ function openCoach() {
 function closeCoach() {
   $('#coachModal').classList.remove('show');
 }
+function goToCoachSettings() {
+  closeCoach();
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  const tab = document.querySelector('[data-tab="settings"]');
+  if (tab) tab.classList.add('active');
+  document.getElementById('pane-settings').classList.add('active');
+  setTimeout(() => {
+    const el = document.getElementById('settingsApiKey');
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+  }, 100);
+}
 function renderCoachHistory() {
   const body = $('#coachBody');
   if (State.coachHistory.length === 0) {
+    const mode = State.apiKey
+      ? `<div style="display: inline-flex; align-items: center; gap: 6px; background: var(--gradient); color: #000; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-bottom: 12px;">🧠 Powered by Claude</div>`
+      : `<div style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--text-dim); padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; margin-bottom: 12px;">⚙️ Rules engine · <a onclick="goToCoachSettings()" style="color: var(--accent); cursor: pointer;">Enable Claude</a></div>`;
     body.innerHTML = `
       <div class="coach-empty">
+        ${mode}
         <div class="coach-empty-icon">🧠</div>
         <div class="coach-empty-title">Your AI Fitness Coach</div>
         <div class="coach-empty-desc">
@@ -2222,7 +2466,7 @@ function renderCoachHistory() {
               <ul>${entry.adjustments.map(a => `<li>${escapeHtml(a.reason)}</li>`).join('')}</ul>
             </div>
           ` : ''}
-          <div class="chat-msg-meta">Coach</div>
+          <div class="chat-msg-meta">Coach · ${entry.source === 'claude' ? '🧠 Claude' : '⚙️ Rules'}</div>
         </div>
       </div>
     `;
@@ -2241,12 +2485,15 @@ function useSuggestion(text) {
   $('#coachInput').value = text;
   $('#coachInput').focus();
 }
-function sendToCoach() {
+async function sendToCoach() {
   const input = $('#coachInput');
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
-  // Show typing indicator briefly for feel
+  input.style.height = 'auto';
+  const sendBtn = $('#coachSend');
+  sendBtn.disabled = true;
+
   const body = $('#coachBody');
   if (State.coachHistory.length === 0) body.innerHTML = '';
   body.insertAdjacentHTML('beforeend', `
@@ -2261,12 +2508,30 @@ function sendToCoach() {
     </div>
   `);
   body.scrollTop = body.scrollHeight;
-  setTimeout(() => {
-    const result = consultCoach(msg);
-    renderCoachHistory();
-    renderAll();
-    toast(result.adjustments.length > 0 ? `✓ Coach applied ${result.adjustments.length} adjustment${result.adjustments.length>1?'s':''}` : '✓ Coach replied');
-  }, 700);
+
+  let result;
+  const hasKey = !!State.apiKey;
+  try {
+    if (hasKey) {
+      result = await consultCoachClaude(msg);
+    } else {
+      await new Promise(r => setTimeout(r, 600)); // simulate think time
+      result = consultCoach(msg);
+    }
+  } catch (err) {
+    // Fall back to rules engine on any Claude error
+    console.warn('Claude failed, falling back to rules:', err);
+    toast('⚠️ Claude unavailable — using rules engine');
+    result = consultCoach(msg);
+  }
+
+  sendBtn.disabled = false;
+  renderCoachHistory();
+  renderAll();
+  const src = result.entry.source === 'claude' ? ' (Claude)' : '';
+  toast(result.adjustments.length > 0
+    ? `✓ Coach applied ${result.adjustments.length} adjustment${result.adjustments.length>1?'s':''}${src}`
+    : `✓ Coach replied${src}`);
 }
 
 // ============================================================
