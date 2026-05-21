@@ -46,7 +46,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text); line-height: 1.5;
     padding-top: max(20px, env(safe-area-inset-top));
-    padding-bottom: calc(90px + env(safe-area-inset-bottom));
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
     overflow-x: hidden; -webkit-font-smoothing: antialiased;
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -119,7 +119,19 @@
   }
   .day-title h1 { font-size: 22px; font-weight: 700; }
   .day-title .meta { color: var(--text-dim); font-size: 13px; }
-  .day-summary { color: var(--text-2); font-size: 14px; margin-bottom: 14px; }
+  .day-summary { color: var(--text-2); font-size: 14px; margin-bottom: 10px; }
+  .day-rationale {
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px;
+  }
+  .day-rationale .r-label {
+    font-size: 11px; color: var(--accent); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;
+  }
+  .day-rationale .r-text {
+    font-size: 13px; color: var(--text-2); line-height: 1.55;
+  }
 
   /* Exercise card */
   .ex-card {
@@ -157,12 +169,55 @@
   .ex-params .p { display: inline-flex; align-items: center; gap: 4px; }
   .ex-params .p b { color: var(--text); font-weight: 600; }
   .ex-notes { font-size: 12px; color: var(--text-dim); margin-top: 6px; font-style: italic; }
-  .ex-del {
+  .ex-actions { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+  .ex-edit, .ex-del {
     background: transparent; border: none; color: var(--text-dim);
-    font-size: 18px; cursor: pointer; padding: 4px 6px; line-height: 1;
-    flex: 0 0 auto;
+    font-size: 16px; cursor: pointer; padding: 2px 6px; line-height: 1;
   }
+  .ex-edit:hover { color: var(--accent); }
   .ex-del:hover { color: var(--danger); }
+
+  /* Goal banner */
+  .goal-banner {
+    background: linear-gradient(135deg, rgba(63,185,80,.10), rgba(88,166,255,.10));
+    border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    transition: .15s;
+  }
+  .goal-banner:hover { border-color: var(--accent); }
+  .goal-banner .g-ico { font-size: 22px; flex: 0 0 auto; }
+  .goal-banner .g-body { flex: 1; min-width: 0; }
+  .goal-banner .g-label {
+    font-size: 11px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: .5px; margin-bottom: 2px;
+  }
+  .goal-banner .g-text {
+    font-size: 14px; color: var(--text); font-weight: 500; line-height: 1.4;
+  }
+  .goal-banner .g-edit { color: var(--text-dim); font-size: 16px; flex: 0 0 auto; }
+
+  /* Coach card */
+  .coach-card {
+    background: linear-gradient(135deg, rgba(188,140,255,.10), rgba(63,185,80,.06));
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px;
+    position: relative;
+  }
+  .coach-card .c-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-size: 12px; color: var(--purple); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .coach-card .c-head .c-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--gradient); display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #000; font-weight: 900;
+  }
+  .coach-card .c-text {
+    font-size: 14px; color: var(--text); line-height: 1.55;
+  }
 
   /* Notes textarea */
   .notes-box {
@@ -342,6 +397,7 @@
 
   <!-- PLAN pane (browse all 7 days) -->
   <div class="pane" id="panePlan">
+    <div id="planGoalSlot"></div>
     <div class="day-strip" id="dayStrip"></div>
     <div id="planContent"></div>
   </div>
@@ -649,10 +705,12 @@ const SYSTEM_PROMPT_INITIAL = `You are an expert personal fitness coach building
 Output STRICT JSON only — no prose, no markdown fences. Schema:
 {
   "summary": "1-2 sentence overview of the week's strategy",
+  "coach_message": "A warm, motivating paragraph (2-4 sentences) addressed directly to the user. Tell them what this week is about, what to focus on, and give them a push. Be encouraging but specific to their goal. Speak like a real coach, not a generic motivator.",
   "days": [
     {
       "title": "Short day name (e.g. 'Upper Push', 'Cardio + Core', 'Rest')",
       "summary": "1 sentence on the focus of this day",
+      "rationale": "2-3 sentences explaining WHY these specific exercises today, tied directly to the user's goal. Mention what each major exercise contributes (e.g. 'incline press hits upper chest which is the lagging area for the V-shape you want', 'this incline-walk cardio burns fat while sparing your joints'). Speak to the user directly.",
       "exercises": [
         {
           "name": "Exercise name",
@@ -695,8 +753,11 @@ The user has completed (or partially completed) a prior 7-day plan. You will rec
 Build the NEXT 7-day plan. Use the same JSON schema as before:
 {
   "summary": "1-2 sentence overview reflecting what you observed and adjusted",
-  "days": [ { "title", "summary", "exercises": [ {name, category, sets, reps, weight, duration_min, distance_km, speed_kmh, incline_deg, rest_sec, notes} ] } ]
+  "coach_message": "A warm, motivating paragraph (2-4 sentences) addressed directly to the user. Acknowledge what they did last week (call out wins or honest struggles), tell them what this next week is about, and give them a push. Be specific to their data — not generic.",
+  "days": [ { "title", "summary", "rationale", "exercises": [ {name, category, sets, reps, weight, duration_min, distance_km, speed_kmh, incline_deg, rest_sec, notes} ] } ]
 }
+
+Each day MUST include a "rationale" field: 2-3 sentences explaining WHY these specific exercises today, tied directly to the user's goal and to what you observed in their prior week. Reference their data when relevant ("you completed every pull session last week, so we're adding a second back day").
 
 Adjustment principles:
 - If completion was high and the user felt strong, progress (more volume, slightly heavier, harder variants).
@@ -815,10 +876,12 @@ function cycleFromAIResponse(parsed, startDate, generatedBy) {
     generatedAt: new Date().toISOString(),
     generatedBy: generatedBy || 'initial',
     summary: parsed.summary || '',
+    coach_message: parsed.coach_message || '',
     days: parsed.days.map((d, i) => ({
       date: addDays(startDate, i),
       title: d.title || `Day ${i + 1}`,
       summary: d.summary || '',
+      rationale: d.rationale || '',
       exercises: (d.exercises || []).map(ex => ({
         id: uid(),
         name: ex.name,
@@ -892,12 +955,18 @@ function renderToday() {
   }
 
   container.innerHTML = `
+    ${goalBannerHtml()}
+    ${coachCardHtml()}
     ${banner}
     <div class="day-title">
       <h1>Day ${dayIdx + 1} · ${day.title}</h1>
       <div class="meta">${fmtDateLong(day.date)}</div>
     </div>
     <div class="day-summary">${day.summary || ''}</div>
+    ${day.rationale ? `<div class="day-rationale">
+      <div class="r-label">Why today</div>
+      <div class="r-text">${escapeHtml(day.rationale)}</div>
+    </div>` : ''}
     <div id="exList-${day.date}"></div>
     <button class="add-ex-btn" onclick="openAddEx('${day.date}')">+ Add exercise</button>
     <div class="card" style="margin-top: 16px;">
@@ -944,6 +1013,11 @@ function renderExerciseList(day) {
       renderDayStrip();
     });
   });
+  wrap.querySelectorAll('[data-edit]').forEach(el => {
+    el.addEventListener('click', () => {
+      openAddEx(day.date, el.dataset.edit);
+    });
+  });
 }
 
 function exerciseCardHtml(ex, day) {
@@ -970,7 +1044,10 @@ function exerciseCardHtml(ex, day) {
           ${params.length ? `<div class="ex-params">${params.join('')}</div>` : ''}
           ${ex.notes ? `<div class="ex-notes">${escapeHtml(ex.notes)}</div>` : ''}
         </div>
-        <button class="ex-del" data-del="${ex.id}" title="Delete">×</button>
+        <div class="ex-actions">
+          <button class="ex-edit" data-edit="${ex.id}" title="Edit">✎</button>
+          <button class="ex-del" data-del="${ex.id}" title="Delete">×</button>
+        </div>
       </div>
     </div>`;
 }
@@ -981,8 +1058,32 @@ function escapeHtml(s) {
 }
 
 /* ============ RENDERING: PLAN ============ */
+function goalBannerHtml() {
+  if (!State.profile?.goal) return '';
+  return `<div class="goal-banner" onclick="switchPane('paneSettings')" title="Edit goal in Settings">
+    <div class="g-ico">🎯</div>
+    <div class="g-body">
+      <div class="g-label">Your goal</div>
+      <div class="g-text">${escapeHtml(State.profile.goal)}</div>
+    </div>
+    <div class="g-edit">›</div>
+  </div>`;
+}
+
+function coachCardHtml() {
+  const cycle = activeCycle();
+  const msg = cycle?.coach_message?.trim();
+  if (!msg) return '';
+  return `<div class="coach-card">
+    <div class="c-head"><div class="c-avatar">F</div> Coach's note</div>
+    <div class="c-text">${escapeHtml(msg)}</div>
+  </div>`;
+}
+
 function renderDayStrip() {
   const strip = $('#dayStrip');
+  const slot = $('#planGoalSlot');
+  if (slot) slot.innerHTML = goalBannerHtml() + coachCardHtml();
   const cycle = activeCycle();
   if (!cycle) {
     strip.innerHTML = '';
@@ -1038,6 +1139,10 @@ function renderPlanContent() {
       <div class="meta">${fmtDateLong(day.date)}</div>
     </div>
     <div class="day-summary">${day.summary || ''}</div>
+    ${day.rationale ? `<div class="day-rationale">
+      <div class="r-label">Why today</div>
+      <div class="r-text">${escapeHtml(day.rationale)}</div>
+    </div>` : ''}
     <div id="exList-${day.date}"></div>
     <button class="add-ex-btn" onclick="openAddEx('${day.date}')">+ Add exercise</button>
     <div class="card" style="margin-top: 16px;">
@@ -1122,12 +1227,15 @@ function openOnboarding() {
   if (State.apiKey) $('#obApiKey').value = State.apiKey;
 }
 
-function openAddEx(date) {
+function openAddEx(date, editExId) {
   const cycle = activeCycle();
   if (!cycle) return;
   const day = cycle.days.find(d => d.date === date);
   if (!day) return;
   addExForDate = date;
+  addExEditId = editExId || null;
+  const editing = addExEditId ? day.exercises.find(e => e.id === addExEditId) : null;
+
   // Reset form
   $('#addExName').value = '';
   $('#addExSets').value = '';
@@ -1141,12 +1249,47 @@ function openAddEx(date) {
   $('#addExMobDur').value = '';
   $('#addExMobSets').value = '';
   $('#addExNotes').value = '';
-  document.querySelector('input[name="addExCat"][value="strength"]').checked = true;
+
+  // Header + button text
+  const title = $('#addExModal .modal h2');
+  const sub = $('#addExModal .modal .modal-sub');
+  const saveBtn = $('#addExSave');
+  if (editing) {
+    if (title) title.textContent = 'Edit exercise';
+    if (sub) sub.textContent = 'Update what you actually did — sets, reps, weight, cardio params.';
+    if (saveBtn) saveBtn.textContent = 'Save';
+    // Pre-fill
+    $('#addExName').value = editing.name || '';
+    const cat = ['strength', 'cardio', 'mobility'].includes(editing.category) ? editing.category : 'strength';
+    const catInput = document.querySelector(`input[name="addExCat"][value="${cat}"]`);
+    if (catInput) catInput.checked = true;
+    if (cat === 'strength') {
+      if (editing.sets != null) $('#addExSets').value = editing.sets;
+      if (editing.reps != null) $('#addExReps').value = editing.reps;
+      if (editing.weight != null) $('#addExWeight').value = editing.weight;
+      if (editing.rest_sec != null) $('#addExRest').value = editing.rest_sec;
+    } else if (cat === 'cardio') {
+      if (editing.duration_min != null) $('#addExDur').value = editing.duration_min;
+      if (editing.distance_km != null) $('#addExDist').value = editing.distance_km;
+      if (editing.speed_kmh != null) $('#addExSpeed').value = editing.speed_kmh;
+      if (editing.incline_deg != null) $('#addExIncline').value = editing.incline_deg;
+    } else if (cat === 'mobility') {
+      if (editing.duration_min != null) $('#addExMobDur').value = editing.duration_min;
+      if (editing.sets != null) $('#addExMobSets').value = editing.sets;
+    }
+    $('#addExNotes').value = editing.notes || '';
+  } else {
+    if (title) title.textContent = 'Add exercise';
+    if (sub) sub.textContent = 'Add anything you did today — gym equipment, cardio, mobility.';
+    if (saveBtn) saveBtn.textContent = 'Add';
+    document.querySelector('input[name="addExCat"][value="strength"]').checked = true;
+  }
   updateAddExCategoryUi();
   openModal('addExModal');
   setTimeout(() => $('#addExName').focus(), 100);
 }
 let addExForDate = null;
+let addExEditId = null;
 
 function updateAddExCategoryUi() {
   const cat = document.querySelector('input[name="addExCat"]:checked')?.value || 'strength';
@@ -1163,35 +1306,48 @@ function saveAddEx() {
   const name = $('#addExName').value.trim();
   if (!name) return toast('Name required', true);
   const cat = document.querySelector('input[name="addExCat"]:checked')?.value || 'strength';
-  const ex = {
-    id: uid(),
+  const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+
+  const editing = addExEditId ? day.exercises.find(e => e.id === addExEditId) : null;
+
+  // Build the fresh field values (null everything not for this category)
+  const fields = {
     name,
     category: cat,
     sets: null, reps: null, weight: null,
     duration_min: null, distance_km: null, speed_kmh: null, incline_deg: null, rest_sec: null,
-    notes: $('#addExNotes').value.trim() || '',
-    source: 'custom',
-    done: false
+    notes: $('#addExNotes').value.trim() || ''
   };
-  const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
   if (cat === 'strength') {
-    ex.sets = num($('#addExSets').value);
-    ex.reps = $('#addExReps').value.trim() || null;
-    ex.weight = num($('#addExWeight').value);
-    ex.rest_sec = num($('#addExRest').value);
+    fields.sets = num($('#addExSets').value);
+    fields.reps = $('#addExReps').value.trim() || null;
+    fields.weight = num($('#addExWeight').value);
+    fields.rest_sec = num($('#addExRest').value);
   } else if (cat === 'cardio') {
-    ex.duration_min = num($('#addExDur').value);
-    ex.distance_km = num($('#addExDist').value);
-    ex.speed_kmh = num($('#addExSpeed').value);
-    ex.incline_deg = num($('#addExIncline').value);
+    fields.duration_min = num($('#addExDur').value);
+    fields.distance_km = num($('#addExDist').value);
+    fields.speed_kmh = num($('#addExSpeed').value);
+    fields.incline_deg = num($('#addExIncline').value);
   } else if (cat === 'mobility') {
-    ex.duration_min = num($('#addExMobDur').value);
-    ex.sets = num($('#addExMobSets').value);
+    fields.duration_min = num($('#addExMobDur').value);
+    fields.sets = num($('#addExMobSets').value);
   }
-  day.exercises.push(ex);
+
+  if (editing) {
+    Object.assign(editing, fields);
+    toast('Updated');
+  } else {
+    day.exercises.push({
+      id: uid(),
+      ...fields,
+      source: 'custom',
+      done: false
+    });
+    toast('Added');
+  }
+  addExEditId = null;
   save();
   closeModal('addExModal');
-  toast('Added');
   // Re-render whichever pane is showing this date
   if ($('#paneToday').classList.contains('active')) renderToday();
   if ($('#panePlan').classList.contains('active')) { renderDayStrip(); renderPlanContent(); }
@@ -1439,6 +1595,7 @@ window.openAddEx = openAddEx;
 window.openConsult = openConsult;
 window.generateInitialFlow = generateInitialFlow;
 window.closeModal = closeModal;
+window.switchPane = switchPane;
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
