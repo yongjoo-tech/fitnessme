@@ -1,164 +1,115 @@
-# FitnessMe — 30-Day Fitness Dashboard
+# FitnessMe — AI 7-Day Fitness Planner
 
 ## Project Overview
-A personal 30-day fitness plan dashboard for Yong Joo. Single-file HTML web app with mobile-first PWA support.
+A personal fitness dashboard that generates a tailored 7-day plan via Claude AI based on user profile (birthday, gender, end goal). The user logs what they actually do each day, adds custom exercises (gym equipment, cardio with structured parameters), and writes daily notes. A "Consult Fitness" button sends all of that back to Claude to generate the next 7-day cycle.
 
-## Goals
-- Lose 3kg by end of month
-- Build V-shape physique (lats, shoulders, upper back focus)
-- Increase overall strength
-- Improve VO2 max
+Single-file HTML web app with mobile-first PWA support.
 
-## User Profile
-- Fitness level: Intermediate
-- Gym access: Anytime Fitness + 5kg dumbbell at home
-- Time per day: 30-60 minutes
-- **Injury: Knee pain — likely Patellofemoral Pain Syndrome (PFPS)**
+## Core Flow
 
-## Plan Constraints (PFPS-aware)
-- No deep squats (limit to pain-free range, usually 0-60°)
-- No lunges, jumping, or high-impact movements
-- No running until knee settles
-- Cardio = bike (low resistance), elliptical, incline walking
-- Hip-hinge dominant lower body (RDLs over squats)
-- Daily knee rehab routine (5 min, non-negotiable)
+1. **Onboarding** — modal asks for birthday, gender, end goal (free text), and Anthropic API key. Claude generates the first 7-day plan.
+2. **Today / Plan** — current day shows AI-generated exercises with structured parameters. User can:
+   - Check off exercises as done
+   - Delete exercises they don't want
+   - Add custom exercises with structured fields
+   - Write a daily note ("how are you feeling")
+3. **Consult Fitness** — persistent floating button. Tap to send the current cycle (planned + completed + custom + removed + notes) to Claude. A new 7-day plan is generated based on that data; the old cycle is archived to History.
 
-## Weekly Split
-- Mon — Upper Push + LISS cardio
-- Tue — Lower Hinge + Core
-- Wed — Active Recovery + Knee rehab
-- Thu — Upper Pull (V-shape focus)
-- Fri — Full Body Strength + Core
-- Sat — VO2 max intervals (4x4 Norwegian protocol on bike)
-- Sun — Rest + mobility
+## Data Model (localStorage key: `fitnessme_v6`)
 
-## Adaptive Engine Logic
-- Great / Good → Run plan as written (with encouragement)
-- Okay → Plan as written, optional last-set drop
-- Tired → Reduce sets by 1, lighter loads
-- Sore → Swap to active recovery + mobility
-- Knee pain → Auto-swap to upper body + low-resistance bike + extra rehab
-- Sick → Full rest
+```js
+State = {
+  profile: { birthday, gender, goal, createdAt },
+  apiKey: '',
+  model: 'claude-haiku-4-5-20251001',
+  cycles: [
+    {
+      id, startDate, generatedAt, generatedBy: 'initial' | 'consult',
+      summary,
+      days: [
+        {
+          date,            // ISO YYYY-MM-DD
+          title,           // e.g. "Upper Push", AI-provided
+          summary,
+          exercises: [{
+            id, name,
+            category: 'strength' | 'cardio' | 'mobility' | 'rest',
+            sets, reps, weight,
+            duration_min, distance_km, speed_kmh, incline_deg, rest_sec,
+            notes,
+            source: 'ai' | 'custom',
+            done: bool
+          }],
+          note: '',         // user's daily feelings
+          removed: [{name, category}]  // exercises the user deleted (sent on consult)
+        }
+      ]
+    }
+  ],
+  activeCycleId,
+  activeDay,                // ISO date currently focused in Plan pane
+  archived: [...past cycles]
+}
+```
 
-## What Has Been Built (v5 — current)
-v5 adds **per-exercise weight logging** for progressive overload tracking:
-- Every weighted exercise gets a "📊 Log lift" pill (skipped for cardio, bodyweight, knee rehab)
-- Tap → expands inline panel with Weight (kg) + Reps inputs + Save button
-- Smart defaults: pre-fills placeholder with your last logged weight/reps
-- Shows "Last time (5 days ago): 12.5kg × 10" reminder
-- Pill changes color (green ✓ with text "Edit lift") once today is logged
-- Press Enter in either field to save
-- 5 most recent entries shown in mini-history below inputs
-- Persists in `State.lifts = { exerciseId: [{ date, weight, reps, note }] }`
-- **PR detection** — toast pops "🏆 New PR!" when you beat your previous best (weight then reps)
-- **New "Strength progression" card** on Progress tab:
-  - Per-exercise card with: current weight × reps, progress vs day 1 (+/- kg or reps), PR record, total log count
-  - Mini sparkline chart of last 12 entries (height = relative weight)
-  - Sorted by most recently logged
-  - Empty state guides user to start logging on Today tab
-- Lift data included in export/import JSON
+## UI
 
-## What Has Been Built (v4)
-v4 adds **real Claude AI coach** (BYOK — bring your own key):
-- Settings → Fitness Coach card: paste Anthropic API key (`sk-ant-...`), pick model (Haiku 4.5 default, Sonnet 4.6, or Opus 4.6)
-- "Test" button confirms the key works before relying on it
-- When a key is set, `sendToCoach()` calls Anthropic Messages API directly from the browser using `anthropic-dangerous-direct-browser-access: true` header
-- System prompt includes: PFPS constraint, full weekly split, exercise ID list, knee-rehab requirement, and structured JSON output schema
-- User message includes: goal, current day, completion stats, mood counts, weight delta, last 7 days detail, last 3 conversations
-- Claude returns JSON `{ response, adjustments[] }` — same shape as rules engine, so adjustments flow through identical `applyCoachAdjustments()`
-- Each coach reply tagged with `source: 'claude' | 'rules'`, shown as 🧠 Claude or ⚙️ Rules in the chat
-- Coach mode badge in Settings shows CLAUDE ON or RULES ENGINE
-- API key stored masked (`••••••••XXXXXX`); cleared when user blanks the field
-- **Graceful fallback** — if Claude API errors (invalid key, rate limit, network), it auto-falls back to the rules engine and toasts a warning
-- Cost: ~$0.001 per message with Haiku, ~$0.01 with Sonnet
+- **Today** — current day of the active cycle. Empty state if no plan exists yet.
+- **Plan** — 7-day strip + selected day's full detail (edit any day in the cycle).
+- **History** — list of past archived cycles, tap to view full detail.
+- **Settings** — edit profile, manage API key/model, export/import JSON, reset.
 
-## What Has Been Built (v3)
-v3 adds:
-- **Goal banner** at top of Today screen — shows current goals ("V-shaped body · higher VO2 max · 3kg fat loss") with tap-to-edit
-- **Consult Fitness Coach** floating button (bottom-right, above nav)
-- **Coach modal** — full chat-style UI with:
-  - Suggestion chips for first-time users ("My shoulder is sore", "I want more cardio", etc.)
-  - Multi-line input with Enter-to-send, Shift+Enter for newline, auto-resize textarea
-  - Typing indicator animation, smooth scroll-to-bottom
-  - Conversation history persists across sessions
-- **Smart Coach engine** (rules-based, no external API):
-  - Reads last 7 days: completion rate, mood pattern, weight trend, knee pain count, tired count
-  - Parses user message for: 8 pain types, fatigue, time, intent (more arms/core/cardio/V-shape/legs/strength/rest), progress signals
-  - Generates concrete adjustments: avoid exercises, reduce volume, time-cap, add exercise, increase intensity
-  - Adjustments apply to next 7 days automatically (3 days for fatigue)
-  - Coach response includes empathetic open + data observations + applied changes
-- **Coach adjustments** flow through `applyCoachAdjustments()` inside `getDayPlan()` — modifies upcoming exercises transparently
-- **"Coach adjusted today" banner** on Today screen — shows when coach has modified the current day's workout
-- **Settings → Fitness Coach card** — view active adjustments count + conversation count, clear either independently
-- **Coach data** included in export/import JSON
+## Claude Integration (BYOK)
 
-## What Has Been Built (v2)
-- `index.html` — Premium UX redesign:
-  - **Mobile-first bottom navigation** (Today / Calendar / Progress / Plan / Settings)
-  - **Hero card** with progress ring, streak counter, current weight
-  - **Mood selector** with 7 options + adaptive plan changes shown inline
-  - **Exercise cards** with collapsible form guides (target muscles + 5 form cues each)
-  - **YouTube demo button** on every exercise (one-tap to video tutorial)
-  - **Built-in rest timer** with quick 1:00 / 1:30 / 2:00 presets and vibration alert
-  - **Streak tracking** (counts days with ≥80% completion)
-  - **Quick weight log** on Today screen (in addition to Progress tab)
-  - **Beautiful weight trend chart** with gradient fill, target line, daily deltas
-  - **Per-type completion stats** (push/pull/hinge etc)
-  - **30-day calendar** with status colors and tap-to-detail
-  - **Toast notifications** for actions
-  - **Onboarding modal** with smart defaults (auto target = start − 3kg)
-  - **Data export + import** (JSON) for cross-device sync
-  - **Celebration toast** when day 100% complete
-  - **Smooth animations, dark theme, premium polish**
-- `manifest.json` — PWA manifest for iPhone/Android home-screen install
-- `icon.png` — 512×512 app icon
-- `DEPLOY.md` — Step-by-step guide to host on GitHub Pages + install on phone
+Two system prompts in `index.html`:
+
+- `SYSTEM_PROMPT_INITIAL` — generates the very first plan from profile.
+- `SYSTEM_PROMPT_CONSULT` — generates the next plan from prior cycle data + user message.
+
+Both return strict JSON with this shape:
+```json
+{
+  "summary": "...",
+  "days": [
+    {
+      "title": "Upper Push",
+      "summary": "...",
+      "exercises": [
+        { "name": "...", "category": "strength|cardio|mobility|rest",
+          "sets": 3, "reps": "8-12", "weight": 20,
+          "duration_min": null, "distance_km": null, "speed_kmh": null,
+          "incline_deg": null, "rest_sec": 90, "notes": "..." }
+      ]
+    }
+  ]
+}
+```
+
+API call uses `anthropic-dangerous-direct-browser-access: true` header. API key stored in localStorage.
+
+## Add Custom Exercise
+
+Modal with name + category radio + conditional structured fields:
+- **Strength** — sets, reps, weight (kg), rest (sec)
+- **Cardio** — duration (min), distance (km), speed (km/h), incline (°)
+- **Mobility** — duration (min), sets
+
+Plus optional notes. Custom exercises are tagged `source: 'custom'` and rendered with a "custom" badge.
 
 ## Files
-- `/CONTEXT.md` — Project context (this file)
-- `/DEPLOY.md` — Phone-access deployment guide
-- `/index.html` — The dashboard (open in any browser)
-- `/manifest.json` — PWA manifest
-- `/icon.png` — App icon
-
-## How to Use
-1. Open `index.html` in browser — onboarding modal pops up first time
-2. Each morning, tap your mood → plan auto-adapts
-3. Tap "📋 How to" on any exercise for form cues + muscle map
-4. Tap "▶ Watch" to open YouTube demo
-5. Tap the checkbox to mark complete (animates + toast)
-6. Use ⏱ Rest timer between sets
-7. Log weight on Today or Progress tab
-8. Calendar tab → tap any day to see what's planned/done
-9. Settings → export data regularly to back up
-
-## Exercise Library
-30+ exercises in `GUIDES` object, each with:
-- Target muscles (chips)
-- 5 specific form cues
-- Curated YouTube search query (auto-opens search → user picks best video)
-
-Covers all base exercises (push/pull/hinge/full/vo2/recovery/rest) + 5 knee rehab moves.
-
-## Still To Do
-- User to deploy to GitHub Pages → install as iPhone PWA (DEPLOY.md)
-- (Optional) Real LLM-powered Coach via Anthropic API (user-provided key, browser direct mode)
-- (Optional) Cloud sync via Firebase/Supabase for true cross-device data
-- (Optional) Nutrition/calorie tracker (kcal in)
-- (Optional) Per-set weight/rep logging for progressive overload tracking
-- (Optional) Photo log (weekly progress pics)
-- (Optional) Specific YouTube video IDs (curated) instead of search queries
+- `index.html` — entire app (~1000 lines, single self-contained file)
+- `manifest.json` — PWA manifest
+- `icon.png` — app icon
+- `CONTEXT.md` — this file
+- `DEPLOY.md` — deployment guide
+- `README.md` — public-facing overview
 
 ## Key Decisions
-- Single HTML file (1710 lines) with vanilla JS — no build, no server, works offline
-- localStorage for persistence — simple, no backend needed
-- Mobile-first responsive design with bottom nav (thumb-friendly)
-- 30-day plan is generated from base templates + week progression + day-of-week slot
-- Adaptive engine modifies exercises in real-time based on mood
-- YouTube search URLs (no API key) for video demos — works forever, no auth
-- Vibration API used on rest timer end (mobile haptic feedback)
-- Auto target weight = start − 3kg in onboarding (smart default)
-- Streak counted with ≥80% threshold (forgiving — life happens)
-- Today is the hero — everything else is secondary navigation
-- Hosting via GitHub Pages (free, permanent URL, matches user's GitHub workflow)
-- Cross-device data sync via export/import JSON for v1
+- Single HTML file with vanilla JS — no build, no server, works offline (except the AI calls)
+- localStorage only — no backend
+- Mobile-first, bottom nav
+- 7-day cycles instead of fixed 30-day — designed for iterative AI-driven adjustment
+- Profile is AI-driving (age + gender + free-text goal) — no hardcoded constraints; user describes their own limits and the AI programs around them
+- Custom exercises are first-class: structured fields so cardio with speed/incline/distance works naturally
+- "Consult Fitness" is always available — user decides when to regenerate; not gated to day 7
+- Archived cycles preserve full data (planned + done + notes) for future reference
