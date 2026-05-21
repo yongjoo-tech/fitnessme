@@ -46,7 +46,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text); line-height: 1.5;
     padding-top: max(20px, env(safe-area-inset-top));
-    padding-bottom: calc(220px + env(safe-area-inset-bottom));
+    padding-bottom: calc(110px + env(safe-area-inset-bottom));
     overflow-x: hidden; -webkit-font-smoothing: antialiased;
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -301,29 +301,93 @@
   /* Bottom nav */
   .bot-nav {
     position: fixed; bottom: 0; left: 0; right: 0;
-    background: var(--bg-2); border-top: 1px solid var(--border);
-    display: flex; padding: 6px 0; z-index: 50;
-    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    background: rgba(22,27,34,.92);
+    backdrop-filter: saturate(140%) blur(10px);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: stretch; z-index: 50;
+    padding: 4px 6px; padding-bottom: max(4px, env(safe-area-inset-bottom));
   }
   .nav-btn {
     flex: 1; background: transparent; border: none; cursor: pointer;
     color: var(--text-dim); font-family: inherit; font-size: 11px;
     display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding: 8px 4px; transition: .15s;
+    padding: 8px 4px; transition: .15s; border-radius: 10px;
   }
   .nav-btn .ico { font-size: 20px; }
   .nav-btn.active { color: var(--primary); }
+  .nav-btn.active .ico { transform: translateY(-1px); }
 
-  /* Consult button (floating) */
-  .consult-fab {
-    position: fixed; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom));
-    background: var(--gradient); color: #000; border: none;
-    padding: 12px 18px; border-radius: 999px; cursor: pointer;
-    font-weight: 700; font-size: 14px; font-family: inherit;
-    box-shadow: var(--shadow-md); display: flex; align-items: center; gap: 8px;
-    z-index: 40;
+  /* Consult: center action button in the nav */
+  .nav-consult {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+    margin: -22px 8px 0; padding: 0;
   }
-  .consult-fab:disabled { opacity: .6; }
+  .nav-consult button {
+    width: 58px; height: 58px; border-radius: 50%;
+    background: var(--gradient); color: #000; border: 3px solid var(--bg);
+    cursor: pointer; font-family: inherit; font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-md);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .nav-consult button:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+  .nav-consult button:active { transform: scale(.95); }
+  .nav-consult .lbl {
+    position: absolute; bottom: 2px; font-size: 10px; color: var(--text-dim);
+    font-weight: 600; pointer-events: none;
+  }
+
+  /* Progress bar (Today) */
+  .progress-card {
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px;
+  }
+  .progress-card .p-top {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .progress-card .p-day {
+    font-size: 11px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: .5px; font-weight: 700;
+  }
+  .progress-card .p-count {
+    font-size: 13px; color: var(--text);
+  }
+  .progress-card .p-count b { color: var(--primary); font-weight: 700; }
+  .progress-card .p-bar {
+    height: 8px; background: var(--bg-3); border-radius: 999px; overflow: hidden;
+  }
+  .progress-card .p-fill {
+    height: 100%; background: var(--gradient); border-radius: 999px;
+    transition: width .4s cubic-bezier(.2,.8,.2,1);
+  }
+  .progress-card.complete .p-fill { background: var(--primary); }
+
+  /* Saved indicator (notes) */
+  .saved-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--primary); font-weight: 600;
+    opacity: 0; transition: opacity .2s; margin-left: 8px;
+  }
+  .saved-tag.show { opacity: 1; }
+
+  /* Day chip icon */
+  .day-chip .d-cat { font-size: 16px; line-height: 1; }
+
+  /* Tappable params */
+  .ex-params.tappable { cursor: pointer; }
+  .ex-params.tappable:hover .p b { color: var(--accent); }
+
+  /* Quick-add presets */
+  .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .preset-chip {
+    padding: 6px 10px; border-radius: 999px;
+    background: var(--bg); border: 1px solid var(--border-hi);
+    color: var(--text-2); font-size: 12px; cursor: pointer;
+    font-family: inherit; transition: .15s;
+  }
+  .preset-chip:hover { background: var(--bg-3); border-color: var(--accent); color: var(--text); }
 
   /* Empty states */
   .empty {
@@ -467,15 +531,18 @@
       <button class="btn danger full" id="resetBtn">🔄 Restart — clear everything</button>
     </div>
   </div>
+
+  <!-- Safety spacer so last content clears the bottom nav -->
+  <div style="height: 30px;" aria-hidden="true"></div>
 </div>
 
-<!-- Floating consult button -->
-<button class="consult-fab" id="consultBtn">💬 Consult Fitness</button>
-
-<!-- Bottom nav -->
+<!-- Bottom nav with center Consult action -->
 <div class="bot-nav">
   <button class="nav-btn active" data-pane="paneToday"><span class="ico">📅</span>Today</button>
   <button class="nav-btn" data-pane="panePlan"><span class="ico">🗓</span>Plan</button>
+  <div class="nav-consult">
+    <button id="consultBtn" title="Consult Fitness Coach">💬</button>
+  </div>
   <button class="nav-btn" data-pane="paneHistory"><span class="ico">📚</span>History</button>
   <button class="nav-btn" data-pane="paneSettings"><span class="ico">⚙️</span>Settings</button>
 </div>
@@ -483,8 +550,8 @@
 <!-- Onboarding modal -->
 <div class="modal-bg" id="onboardModal">
   <div class="modal">
-    <h2>Welcome to FitnessMe</h2>
-    <div class="modal-sub">Tell us about yourself so we can build a plan that fits.</div>
+    <h2>Welcome to FitnessMe 👋</h2>
+    <div class="modal-sub">Three quick details and your AI coach will build your first 7-day plan.</div>
     <div class="field">
       <label>Birthday</label>
       <input type="date" id="obBirthday">
@@ -498,8 +565,9 @@
       </div>
     </div>
     <div class="field">
-      <label>End goal</label>
-      <textarea id="obGoal" rows="4" placeholder="E.g. Lose 5kg in 2 months, build muscle, train for a 10km run, get back in shape after injury, etc."></textarea>
+      <label>What do you want to achieve?</label>
+      <textarea id="obGoal" rows="4" placeholder="E.g. Lose 5kg, build a V-shape back, train for a 10km run, get back in shape after a knee injury — mention what gear you have and any constraints (knee pain, no running, etc)."></textarea>
+      <div class="hint">The more specific you are, the better your plan. Mention injuries, gear, time available, etc.</div>
     </div>
     <div class="field">
       <label>Anthropic API key <span style="color: var(--text-dim); font-size: 11px;">(required to generate plans)</span></label>
@@ -515,6 +583,7 @@
   <div class="modal">
     <h2>Add exercise</h2>
     <div class="modal-sub">Add anything you did today — gym equipment, cardio, mobility.</div>
+    <div id="addExPresets" class="preset-row"></div>
     <div class="field">
       <label>Exercise name</label>
       <input type="text" id="addExName" placeholder="e.g. Treadmill walk, Lat pulldown, Calf stretch">
@@ -960,8 +1029,9 @@ function renderToday() {
     ${goalBannerHtml()}
     ${coachCardHtml()}
     ${banner}
+    ${progressCardHtml(day, dayIdx)}
     <div class="day-title">
-      <h1>Day ${dayIdx + 1} · ${day.title}</h1>
+      <h1>${categoryIcon(day)} ${day.title}</h1>
       <div class="meta">${fmtDateLong(day.date)}</div>
     </div>
     <div class="day-summary">${day.summary || ''}</div>
@@ -972,15 +1042,27 @@ function renderToday() {
     <div id="exList-${day.date}"></div>
     <button class="add-ex-btn" onclick="openAddEx('${day.date}')">+ Add exercise</button>
     <div class="card" style="margin-top: 16px;">
-      <h2>How are you feeling?</h2>
+      <h2>How are you feeling? <span class="saved-tag" id="saved-${day.date}">✓ Saved</span></h2>
       <div class="sub">These notes help your next consult build a better plan.</div>
       <textarea class="notes-box" id="note-${day.date}" placeholder="Energy levels, soreness, mood, anything you want to remember…">${day.note || ''}</textarea>
     </div>
   `;
   renderExerciseList(day);
-  $(`#note-${day.date}`).addEventListener('input', e => {
+  wireNoteInput(day);
+}
+
+function wireNoteInput(day) {
+  const ta = $(`#note-${day.date}`);
+  const tag = $(`#saved-${day.date}`);
+  if (!ta) return;
+  ta.addEventListener('input', e => {
     day.note = e.target.value;
     save();
+    if (tag) {
+      clearTimeout(wireNoteInput._t);
+      tag.classList.add('show');
+      wireNoteInput._t = setTimeout(() => tag.classList.remove('show'), 900);
+    }
   });
 }
 
@@ -996,11 +1078,18 @@ function renderExerciseList(day) {
     el.addEventListener('click', () => {
       const ex = day.exercises.find(e => e.id === el.dataset.toggle);
       if (!ex) return;
+      const wasComplete = day.exercises.length > 0 && day.exercises.every(e => e.done);
       ex.done = !ex.done;
       save();
       renderExerciseList(day);
       renderDayStrip();
+      refreshProgressCard(day);
+      const nowComplete = day.exercises.length > 0 && day.exercises.every(e => e.done);
+      if (!wasComplete && nowComplete) toast('🎉 Day complete!');
     });
+  });
+  wrap.querySelectorAll('[data-tap-edit]').forEach(el => {
+    el.addEventListener('click', () => openAddEx(day.date, el.dataset.tapEdit));
   });
   wrap.querySelectorAll('[data-del]').forEach(el => {
     el.addEventListener('click', () => {
@@ -1043,7 +1132,7 @@ function exerciseCardHtml(ex, day) {
             <span class="ex-name">${escapeHtml(ex.name)}</span>
             <span class="ex-cat ${catCls}">${catLbl}</span>
           </div>
-          ${params.length ? `<div class="ex-params">${params.join('')}</div>` : ''}
+          ${params.length ? `<div class="ex-params tappable" data-tap-edit="${ex.id}" title="Tap to edit">${params.join('')}</div>` : ''}
           ${ex.notes ? `<div class="ex-notes">${escapeHtml(ex.notes)}</div>` : ''}
         </div>
         <div class="ex-actions">
@@ -1082,6 +1171,48 @@ function coachCardHtml() {
   </div>`;
 }
 
+const CATEGORY_ICONS = { strength: '💪', cardio: '🏃', mobility: '🧘', rest: '😴' };
+
+function dayPrimaryCategory(day) {
+  if (!day || !day.exercises?.length) return 'rest';
+  const counts = {};
+  for (const ex of day.exercises) {
+    counts[ex.category] = (counts[ex.category] || 0) + 1;
+  }
+  let best = null, bestN = 0;
+  for (const c in counts) if (counts[c] > bestN) { best = c; bestN = counts[c]; }
+  return best || 'rest';
+}
+
+function categoryIcon(day) {
+  return CATEGORY_ICONS[dayPrimaryCategory(day)] || '📅';
+}
+
+function progressCardHtml(day, dayIdx) {
+  const total = day.exercises.length;
+  const done = day.exercises.filter(e => e.done).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const isComplete = total > 0 && done === total;
+  const label = total === 0 ? 'Rest day' : isComplete ? '🎉 All done!' : `<b>${done}</b> of ${total} done`;
+  return `<div class="progress-card ${isComplete ? 'complete' : ''}">
+    <div class="p-top">
+      <div class="p-day">Day ${dayIdx + 1} of 7</div>
+      <div class="p-count">${label}</div>
+    </div>
+    <div class="p-bar"><div class="p-fill" style="width: ${pct}%;"></div></div>
+  </div>`;
+}
+
+function refreshProgressCard(day) {
+  // In-place refresh of the progress card (any pane it's in)
+  const cycle = activeCycle();
+  if (!cycle) return;
+  const dayIdx = cycle.days.indexOf(day);
+  const card = document.querySelector('.progress-card');
+  if (!card) return;
+  card.outerHTML = progressCardHtml(day, dayIdx);
+}
+
 function renderDayStrip() {
   const strip = $('#dayStrip');
   const slot = $('#planGoalSlot');
@@ -1102,6 +1233,7 @@ function renderDayStrip() {
     return `
       <button class="day-chip ${isToday ? 'today' : ''} ${isActive ? 'active' : ''}" data-day="${d.date}">
         <span class="d-lbl">${fmtDayLabel(d.date)}</span>
+        <span class="d-cat">${categoryIcon(d)}</span>
         <span class="d-num">${i + 1}</span>
         <span class="d-dot ${allDone ? 'done' : ''}"></span>
       </button>`;
@@ -1136,8 +1268,9 @@ function renderPlanContent() {
   }
   const dayIdx = cycle.days.indexOf(day);
   wrap.innerHTML = `
+    ${progressCardHtml(day, dayIdx)}
     <div class="day-title">
-      <h1>Day ${dayIdx + 1} · ${day.title}</h1>
+      <h1>${categoryIcon(day)} ${day.title}</h1>
       <div class="meta">${fmtDateLong(day.date)}</div>
     </div>
     <div class="day-summary">${day.summary || ''}</div>
@@ -1148,14 +1281,11 @@ function renderPlanContent() {
     <div id="exList-${day.date}"></div>
     <button class="add-ex-btn" onclick="openAddEx('${day.date}')">+ Add exercise</button>
     <div class="card" style="margin-top: 16px;">
-      <h2>Notes for this day</h2>
+      <h2>Notes for this day <span class="saved-tag" id="saved-${day.date}">✓ Saved</span></h2>
       <textarea class="notes-box" id="note-${day.date}" placeholder="How did this day go?">${day.note || ''}</textarea>
     </div>`;
   renderExerciseList(day);
-  $(`#note-${day.date}`).addEventListener('input', e => {
-    day.note = e.target.value;
-    save();
-  });
+  wireNoteInput(day);
 }
 
 /* ============ RENDERING: HISTORY ============ */
@@ -1286,12 +1416,48 @@ function openAddEx(date, editExId) {
     if (saveBtn) saveBtn.textContent = 'Add';
     document.querySelector('input[name="addExCat"][value="strength"]').checked = true;
   }
+  renderAddExPresets(!!editing);
   updateAddExCategoryUi();
   openModal('addExModal');
   setTimeout(() => $('#addExName').focus(), 100);
 }
 let addExForDate = null;
 let addExEditId = null;
+
+const ADD_EX_PRESETS = [
+  { label: '🏃 Treadmill', cat: 'cardio', fill: { name: 'Treadmill walk', duration_min: 20, speed_kmh: 5, incline_deg: 5 } },
+  { label: '🚴 Bike', cat: 'cardio', fill: { name: 'Stationary bike', duration_min: 20 } },
+  { label: '💪 Lat pulldown', cat: 'strength', fill: { name: 'Lat pulldown', sets: 3, reps: '10' } },
+  { label: '🪑 Bench press', cat: 'strength', fill: { name: 'Bench press', sets: 3, reps: '8' } },
+  { label: '🧘 Stretch', cat: 'mobility', fill: { name: 'Stretching', duration_min: 5 } }
+];
+
+function renderAddExPresets(isEditing) {
+  const row = $('#addExPresets');
+  if (!row) return;
+  row.innerHTML = isEditing ? '' : ADD_EX_PRESETS.map((p, i) =>
+    `<button class="preset-chip" data-preset="${i}">${p.label}</button>`
+  ).join('');
+  row.querySelectorAll('[data-preset]').forEach(el => {
+    el.addEventListener('click', () => {
+      const p = ADD_EX_PRESETS[+el.dataset.preset];
+      if (!p) return;
+      const catInput = document.querySelector(`input[name="addExCat"][value="${p.cat}"]`);
+      if (catInput) catInput.checked = true;
+      updateAddExCategoryUi();
+      const f = p.fill;
+      if (f.name != null) $('#addExName').value = f.name;
+      if (f.sets != null) $('#addExSets').value = f.sets;
+      if (f.reps != null) $('#addExReps').value = f.reps;
+      if (f.weight != null) $('#addExWeight').value = f.weight;
+      if (f.duration_min != null && p.cat === 'cardio') $('#addExDur').value = f.duration_min;
+      if (f.duration_min != null && p.cat === 'mobility') $('#addExMobDur').value = f.duration_min;
+      if (f.distance_km != null) $('#addExDist').value = f.distance_km;
+      if (f.speed_kmh != null) $('#addExSpeed').value = f.speed_kmh;
+      if (f.incline_deg != null) $('#addExIncline').value = f.incline_deg;
+    });
+  });
+}
 
 function updateAddExCategoryUi() {
   const cat = document.querySelector('input[name="addExCat"]:checked')?.value || 'strength';
